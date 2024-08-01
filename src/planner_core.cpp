@@ -282,11 +282,9 @@ bool GlobalPlanner::makePlan(const geometry_msgs::PoseStamped& start, const geom
         worldToMap(wx, wy, goal_x, goal_y);
     }
 
-    // ROS_ERROR("Get goal: gx:%f, gy:%f", goal_x, goal_y);
 
-    // ------------------ global replan ensure goal not on obstacle ------------------ 
-    // ROS_ERROR("original plan: cs:%d, sg:%d", costmap_->getCost(start_x, start_y), costmap_->getCost(goal_x, goal_y));
 
+    // -------------------------------------------------------------------------------
     int diff_x = goal_x - start_x;
     int diff_y = goal_y - start_y;
     int target_x;
@@ -296,30 +294,98 @@ bool GlobalPlanner::makePlan(const geometry_msgs::PoseStamped& start, const geom
     double scale = 1.0;
     double dScale = 0.01;
 
-    while(!done)
+    while (!done)
     {
-      if(scale < 0)
-      {
-        target_x = start_x;
-        target_y = start_y;
-        ROS_WARN("Could not find a valid plan for this goal");
-        break;
-      }
-      target_x = static_cast<int>(start_x + scale * diff_x);
-      target_y = static_cast<int>(start_y + scale * diff_y);
-      
-      double cost = costmap_->getCost(target_x, target_y);
-      if(cost < 66)
-      {
-        done = true;
-      }
-      scale -= dScale;
+        if (scale < 0)
+        {
+            target_x = start_x;
+            target_y = start_y;
+            ROS_WARN("Could not find a valid plan by carrot planner.");
+            break;
+        }
+        target_x = static_cast<int>(start_x + scale * diff_x);
+        target_y = static_cast<int>(start_y + scale * diff_y);
+        
+        double cost = costmap_->getCost(target_x, target_y);
+        if (cost < 50)
+        {
+            done = true;
+        }
+        scale -= dScale;
     }
 
-    // overwrite goal 
+    if (!done || std::hypot((target_x - goal_x), (target_y - goal_y)) > 16) 
+    {
+        ROS_WARN("Using area serach global planner.");
+        double best_sdist = DBL_MAX;
+        int tolerance_goal = 16;
+        int search_x;
+        int search_y;
+
+        search_y = goal_y - tolerance_goal;
+        while (search_y <= goal_y + tolerance_goal) 
+        {
+            search_x = goal_x - tolerance_goal;
+            while (search_x <= goal_x + tolerance_goal) 
+            {
+                double sdist = std::hypot((search_x - goal_x), (search_y - goal_y));
+                if (costmap_->getCost(search_x, search_y) < 50 && sdist < best_sdist) 
+                {
+                    best_sdist = sdist;
+                    target_x = search_x;
+                    target_y = search_y;
+                }
+                search_x += 1;
+            }
+            search_y += 1;
+        }
+    }
+
     goal_x = target_x;
     goal_y = target_y;
+    
+    // -------------------------------------------------------------------------------
 
+
+
+    // ROS_ERROR("Get goal: gx:%f, gy:%f", goal_x, goal_y);
+
+    // ------------------ global replan ensure goal not on obstacle ------------------ 
+    // ROS_ERROR("original plan: cs:%d, sg:%d", costmap_->getCost(start_x, start_y), costmap_->getCost(goal_x, goal_y));
+
+    // int diff_x = goal_x - start_x;
+    // int diff_y = goal_y - start_y;
+    // int target_x;
+    // int target_y;
+
+    // bool done = false;
+    // double scale = 1.0;
+    // double dScale = 0.01;
+
+    // while (!done)
+    // {
+    //   if (scale < 0)
+    //   {
+    //     target_x = start_x;
+    //     target_y = start_y;
+    //     ROS_WARN("Could not find a valid plan for this goal");
+    //     break;
+    //   }
+    //   target_x = static_cast<int>(start_x + scale * diff_x);
+    //   target_y = static_cast<int>(start_y + scale * diff_y);
+      
+    //   double cost = costmap_->getCost(target_x, target_y);
+    //   if (cost < 50)
+    //   {
+    //     done = true;
+    //   }
+    //   scale -= dScale;
+    // }
+
+    // // overwrite goal 
+    // goal_x = target_x;
+    // goal_y = target_y;
+    
     // ROS_ERROR("Modified plan: cs:%d, sg:%d", costmap_->getCost(start_x, start_y), costmap_->getCost(goal_x, goal_y));
 
     // ------------------------------ end global replan ------------------------------
